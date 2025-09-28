@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Map + Dropdown Timezone Picker</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+  <style>
+    #map-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .map-box {
+      flex: 1 1 48%;
+    }
+    .map {
+      height: 400px;
+      width: 100%;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+    }
+    .delete-btn {
+      cursor: pointer;
+      color: red;
+      font-weight: bold;
+    }
+    @media (max-width: 992px) {
+      .map-box { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body class="container-fluid py-4">
+  <h2 class="mb-4 text-center">🌍 Timezone Converter (Map + Dropdown)</h2>
+
+  <!-- Maps on Top -->
+  <div id="map-container">
+    <div class="map-box">
+      <h5 class="text-center">From Timezone</h5>
+      <div id="from_map" class="map"></div>
+      <p class="mt-2 text-center">Selected: <span id="from_timezone"></span></p>
+    </div>
+    <div class="map-box">
+      <h5 class="text-center">To Timezone</h5>
+      <div id="to_map" class="map"></div>
+      <p class="mt-2 text-center">Selected: <span id="to_timezone"></span></p>
+    </div>
+  </div>
+
+  <!-- Select Boxes BELOW the maps -->
+  <div class="row mt-4">
+    <div class="col-md-6 mb-3">
+      <label for="from_select" class="form-label">From Timezone (Dropdown):</label>
+      <select id="from_select" class="form-select"></select>
+    </div>
+    <div class="col-md-6 mb-3">
+      <label for="to_select" class="form-label">To Timezone (Dropdown):</label>
+      <select id="to_select" class="form-select"></select>
+    </div>
+  </div>
+
+  <!-- Time Input -->
+  <div class="mb-3 mt-4 text-center">
+    <label for="time" class="form-label">Enter Time:</label>
+    <input type="time" id="time" class="form-control w-25 mx-auto" step="60">
+    <small class="text-muted">⏰ Uses 12-hour format with AM/PM</small>
+  </div>
+
+  <div class="text-center">
+    <button class="btn btn-primary" onclick="convertTime()">Convert</button>
+  </div>
+
+  <!-- Results -->
+  <h3 class="mt-5 text-center">Conversion History</h3>
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped text-center">
+      <thead class="table-dark">
+        <tr>
+          <th>From</th>
+          <th>To</th>
+          <th>Converted Time</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="results"></tbody>
+    </table>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tz-lookup/tz.js"></script>
+  <script>
+    const API_URL = "http://127.0.0.1:5000"; // replace with your backend
+    let fromTimezone = null, toTimezone = null;
+    let fromMarker, toMarker;
+    let fromMap, toMap, fromChoices, toChoices;
+
+    // Initialize map
+    function initMap(divId) {
+      const map = L.map(divId).setView([20, 0], 2);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+      return map;
+    }
+
+    // Load timezones into selects
+    async function loadTimezones() {
+      const res = await fetch(API_URL + "/timezones");
+      const data = await res.json();
+      const fromSelect = document.getElementById("from_select");
+      const toSelect = document.getElementById("to_select");
+
+      data.timezones.forEach(tz => {
+        let opt1 = document.createElement("option");
+        opt1.value = tz; opt1.textContent = tz;
+        fromSelect.appendChild(opt1);
+
+        let opt2 = document.createElement("option");
+        opt2.value = tz; opt2.textContent = tz;
+        toSelect.appendChild(opt2);
+      });
+
+      // ✅ Initialize Choices AFTER elements are visible
+      fromChoices = new Choices(fromSelect, { searchEnabled: true, itemSelectText: "" });
+      toChoices = new Choices(toSelect, { searchEnabled: true, itemSelectText: "" });
+    }
+
+    // Sync dropdown selection
+    function selectTimezone(which, tzName) {
+      if (which === "from") {
+        fromTimezone = tzName;
+        document.getElementById("from_timezone").textContent = tzName;
+        if (fromMarker) fromMap.removeLayer(fromMarker);
+        fromMarker = L.marker([0,0]).addTo(fromMap).bindPopup(tzName).openPopup();
+      } else {
+        toTimezone = tzName;
+        document.getElementById("to_timezone").textContent = tzName;
+        if (toMarker) toMap.removeLayer(toMarker);
+        toMarker = L.marker([0,0]).addTo(toMap).bindPopup(tzName).openPopup();
+      }
+    }
+
+    // Setup maps
+    fromMap = initMap("from_map");
+    toMap = initMap("to_map");
+
+    // Map click updates dropdown
+    fromMap.on("click", function(e) {
+      const tzName = tzlookup(e.latlng.lat, e.latlng.lng);
+      fromTimezone = tzName;
+      document.getElementById("from_timezone").textContent = tzName;
+      if (fromMarker) fromMap.removeLayer(fromMarker);
+      fromMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(fromMap).bindPopup(tzName).openPopup();
+      fromChoices.setChoiceByValue(tzName);
+    });
+
+    toMap.on("click", function(e) {
+      const tzName = tzlookup(e.latlng.lat, e.latlng.lng);
+      toTimezone = tzName;
+      document.getElementById("to_timezone").textContent = tzName;
+      if (toMarker) toMap.removeLayer(toMarker);
+      toMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(toMap).bindPopup(tzName).openPopup();
+      toChoices.setChoiceByValue(tzName);
+    });
+
+    // Dropdown change updates timezone
+    document.addEventListener("change", (e) => {
+      if (e.target.id === "from_select") {
+        selectTimezone("from", e.target.value);
+      }
+      if (e.target.id === "to_select") {
+        selectTimezone("to", e.target.value);
+      }
+    });
+
+    // Convert
+    async function convertTime() {
+      const time = document.getElementById("time").value;
+      if (!fromTimezone || !toTimezone || !time) {
+        alert("Please select both timezones and enter a time.");
+        return;
+      }
+
+      const res = await fetch(API_URL + "/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from_timezone: fromTimezone, time, to_timezone: toTimezone })
+      });
+
+      const data = await res.json();
+      const results = data.converted_times || {};
+      const convertedTime = results[toTimezone];
+
+      const tbody = document.getElementById("results");
+      const row = document.createElement("tr");
+
+      const inputTime12 = new Date("1970-01-01T" + time + ":00").toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+
+      row.innerHTML = `
+        <td>${fromTimezone} (${inputTime12})</td>
+        <td>${toTimezone}</td>
+        <td>${convertedTime}</td>
+        <td><span class="delete-btn" onclick="this.closest('tr').remove()">❌</span></td>
+      `;
+
+      tbody.appendChild(row);
+    }
+
+    loadTimezones();
+  </script>
+</body>
+</html>

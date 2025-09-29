@@ -12,6 +12,10 @@ def home():
         "usage": "POST /convert with {from_timezone, time}"
     })
 
+@app.route('/ping')
+def ping():
+    return "pong"
+
 @app.route('/timezones')
 def get_timezones():
     # Send all available pytz timezones
@@ -54,3 +58,4 @@ def convert_time():
 
 if __name__ == "__main__":
     app.run(debug=True)
+

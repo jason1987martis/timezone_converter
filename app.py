@@ -16,11 +16,12 @@ def home():
 PING_KEY = "123"
 
 @app.get("/pinger")
-def pinger(key: str):
+def pinger():
     """
     Simple keep-alive endpoint that returns a 200 response
     if the provided key matches the configured secret.
     """
+    key = request.args.get('key', 'Guest')
     if key != PING_KEY:
         raise HTTPException(status_code=403, detail="Invalid key")
     return {"status": "alive", "message": "Pinger acknowledged successfully."}
@@ -77,5 +78,6 @@ def convert_time():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 

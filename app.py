@@ -16,7 +16,7 @@ def home():
 PING_KEY = "123"
 
 @app.get("/pinger")
-def pinger(key: str = Query(..., description="Authentication key for cron job")):
+def pinger(key: str):
     """
     Simple keep-alive endpoint that returns a 200 response
     if the provided key matches the configured secret.
@@ -77,4 +77,5 @@ def convert_time():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 

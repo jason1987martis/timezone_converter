@@ -12,6 +12,20 @@ def home():
         "usage": "POST /convert with {from_timezone, time}"
     })
 
+# Replace this with a secure environment variable in production
+PING_KEY = "123"
+
+@app.get("/pinger")
+def pinger(key: str = Query(..., description="Authentication key for cron job")):
+    """
+    Simple keep-alive endpoint that returns a 200 response
+    if the provided key matches the configured secret.
+    """
+    if key != PING_KEY:
+        raise HTTPException(status_code=403, detail="Invalid key")
+    return {"status": "alive", "message": "Pinger acknowledged successfully."}
+
+
 @app.route('/timezones')
 def get_timezones():
     # Send all available pytz timezones
@@ -63,3 +77,4 @@ def convert_time():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
